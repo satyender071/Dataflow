@@ -90,7 +90,7 @@ public class FormIngestionPipeline {
         }
     }
 
-    private static String fileName(String formName) {
+    public static String fileName(String formName) {
         String fileName;
         Calendar calendar = Calendar.getInstance();
         calendar.setTime(new Date());
@@ -99,11 +99,11 @@ public class FormIngestionPipeline {
         int seconds = calendar.get(Calendar.SECOND);
         SecureRandom secureRandom = new SecureRandom();
         fileName = formName + hours + "_" + minutes +
-                "_" + seconds + "_" + secureRandom.nextInt(9999) + "--";
+                "_" + seconds + "_" ;
         return fileName;
     }
 
-    private static String folderName() {
+    public static String folderName() {
         Calendar calendar = Calendar.getInstance();
         calendar.setTime(new Date());
         int month = calendar.get(Calendar.MONTH) + 1;
@@ -160,20 +160,12 @@ public class FormIngestionPipeline {
 
                 BigQuery bigquery = BigQueryOptions.getDefaultInstance().getService();
 
-                DatasetInfo datasetInfo = DatasetInfo.newBuilder("form_ingestion").build();
-
-                Dataset newDataset = bigquery.create(datasetInfo);
-                String newDatasetName = newDataset.getDatasetId().getDataset();
-                log.info(newDatasetName + " created successfully");
-
                 TableId tableId = TableId.of("form_ingestion", formName);
                 TableDefinition tableDefinition = StandardTableDefinition.of(Schema.of());
                 TableInfo tableInfo = TableInfo.newBuilder(tableId, tableDefinition).build();
 
-                log.info("TableId : {}", tableId);
-//                if( !tableId.getTable().equals(formName)) {
 
-                    bigquery.create(tableInfo);
+                log.info("TableId : {}", tableId);
 
                     Schema newSchema =
                             Schema.of(
