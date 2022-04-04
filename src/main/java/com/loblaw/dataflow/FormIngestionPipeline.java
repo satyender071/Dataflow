@@ -1,9 +1,14 @@
 package com.loblaw.dataflow;
 
 
+import avro.shaded.com.google.common.collect.ImmutableList;
+import com.github.wnameless.json.unflattener.JsonUnflattener;
+import com.google.api.services.bigquery.Bigquery;
+import com.google.cloud.bigquery.*;
 import com.google.cloud.kms.v1.CryptoKeyName;
 import com.google.cloud.kms.v1.DecryptResponse;
 import com.google.cloud.kms.v1.KeyManagementServiceClient;
+import com.google.cloud.spanner.Options;
 import com.google.cloud.storage.BlobId;
 import com.google.cloud.storage.BlobInfo;
 import com.google.cloud.storage.Storage;
@@ -18,8 +23,10 @@ import org.apache.beam.sdk.io.gcp.pubsub.PubsubIO;
 import org.apache.beam.sdk.io.gcp.pubsub.PubsubMessage;
 import org.apache.beam.sdk.options.*;
 import org.apache.beam.sdk.transforms.DoFn;
+import org.apache.beam.sdk.transforms.PTransform;
 import org.apache.beam.sdk.transforms.ParDo;
 import org.apache.beam.sdk.values.PCollection;
+import org.apache.beam.sdk.values.PCollectionTuple;
 import org.json.JSONObject;
 
 import java.io.ByteArrayInputStream;
@@ -28,6 +35,7 @@ import java.security.SecureRandom;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.Objects;
+import java.util.UUID;
 
 @Slf4j
 public class FormIngestionPipeline {
@@ -129,9 +137,17 @@ public class FormIngestionPipeline {
                 log.info("Decrypted Data: {}", decrypt.getPlaintext().toStringUtf8());
                 JSONObject jsonObject = new JSONObject(decrypt.getPlaintext().toStringUtf8());
                 JSONObject object = jsonObject.getJSONObject("formMetaData");
+
+                JSONObject formData = new JSONObject(jsonObject.getJSONObject("formData").get("formData").toString());
+//                JSONObject formData = new JSONObject(test.get("formData"));
+                String pureJson = JsonUnflattener.unflatten(formData.toString());
+                JSONObject pureJsonFormat = new JSONObject(pureJson);
+                log.info("json data: {}", pureJsonFormat);
+
                 String formName = String.valueOf(object.get("formName"));
                 String fileName = fileName(formName);
                 log.info("fileName is : {}", fileName);
+
                 Storage storage = StorageOptions.newBuilder().
                         setProjectId(projectId.get()).build().getService();
                 BlobId blobId = BlobId.of(Objects.requireNonNull(bucketName.get()), formName + "/"
@@ -139,9 +155,58 @@ public class FormIngestionPipeline {
                 BlobInfo blobInfo = BlobInfo.newBuilder(blobId).build();
                 byte[] content = data.toByteArray();
                 storage.createFrom(blobInfo, new ByteArrayInputStream(content));
+
                 log.info("storage data: {}", content);
+
+                BigQuery bigquery = BigQueryOptions.getDefaultInstance().getService();
+
+                DatasetInfo datasetInfo = DatasetInfo.newBuilder("form_ingestion").build();
+
+                Dataset newDataset = bigquery.create(datasetInfo);
+                String newDatasetName = newDataset.getDatasetId().getDataset();
+                log.info(newDatasetName + " created successfully");
+
+                TableId tableId = TableId.of("form_ingestion", formName);
+                TableDefinition tableDefinition = StandardTableDefinition.of(Schema.of());
+                TableInfo tableInfo = TableInfo.newBuilder(tableId, tableDefinition).build();
+
+                log.info("TableId : {}", tableId);
+//                if( !tableId.getTable().equals(formName)) {
+
+                    bigquery.create(tableInfo);
+
+                    Schema newSchema =
+                            Schema.of(
+                                    Field.newBuilder("formData", LegacySQLTypeName.STRING)
+                                            .setMode(Field.Mode.REQUIRED)
+                                            .build());
+                                    // Adding below additional column during the load job
+//                                    Field.newBuilder("post_abbr", LegacySQLTypeName.STRING)
+//                                            .setMode(Field.Mode.NULLABLE)
+//                                            .build());
+
+                    LoadJobConfiguration loadJobConfig =
+                            LoadJobConfiguration.builder(tableId, pureJsonFormat.toString())
+                                    .setFormatOptions(FormatOptions.csv())
+                                    .setWriteDisposition(JobInfo.WriteDisposition.WRITE_APPEND)
+                                    .setSchema(newSchema)
+                                    .setSchemaUpdateOptions(ImmutableList.of(JobInfo.SchemaUpdateOption.ALLOW_FIELD_ADDITION))
+                                    .build();
+
+                    JobId jobId = JobId.of(UUID.randomUUID().toString());
+                    Job loadJob = bigquery.create(JobInfo.newBuilder(loadJobConfig).setJobId(jobId).build());
+
+                    // Load data from a GCS parquet file into the table
+                    // Blocks until this load table job completes its execution, either failing or succeeding.
+                    Job completedJob = loadJob.waitFor();
+                    log.info("job details: {}", completedJob);
+//                }
+
             } catch (IOException e) {
                 log.error("Can not process the data successfully");
+                e.printStackTrace();
+            } catch (InterruptedException e) {
+                log.error("Can not write data to bigquery table");
                 e.printStackTrace();
             }
         }
