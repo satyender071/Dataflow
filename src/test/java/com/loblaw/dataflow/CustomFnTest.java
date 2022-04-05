@@ -8,14 +8,22 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.jupiter.api.Assertions;
 import org.junit.rules.ExpectedException;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
+
+import java.security.SecureRandom;
+import java.util.Calendar;
+import java.util.Date;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 public class CustomFnTest {
 
     @Rule
     public ExpectedException expectedException = ExpectedException.none();
-
 
 
     @Before
@@ -35,7 +43,50 @@ public class CustomFnTest {
         DoFn.ProcessContext processContext = Mockito.mock(DoFn.ProcessContext.class);
         ByteString data = Mockito.mock(ByteString.class);
         Mockito.when((processContext.element())).thenReturn(data);
-        Assertions.assertAll(() -> new FormIngestionPipeline.CustomFn(myOptions));
+        Assertions.assertAll(() -> new CustomFn(myOptions));
+    }
+
+    @Test
+    public void fileName_should_start_with_given_fileName_parameter() throws Exception {
+
+        FormIngestionPipeline.MyOptions myOptions = PipelineOptionsFactory
+                .fromArgs("--projectId=test","--keyRing=test",
+                        "--keyId=testKey", "--locationId=global",
+                        "--bucketName=testBucket")
+                .withValidation()
+                .as(FormIngestionPipeline.MyOptions.class);
+
+        String fileName;
+        String formName = "ABC";
+        Calendar calendar = Calendar.getInstance();
+        calendar.setTime(new Date());
+        int hours = calendar.get(Calendar.HOUR_OF_DAY);
+        int minutes = calendar.get(Calendar.MINUTE);
+        int seconds = calendar.get(Calendar.SECOND);
+        SecureRandom secureRandom = new SecureRandom();
+        fileName = formName + hours + "_" + minutes +
+                "_" + seconds + "_";
+        CustomFn customFn = new CustomFn(myOptions);
+        assertTrue(fileName, customFn.fileName("ABC").startsWith("ABC"));
+    }
+
+    @Test
+    public void folderName_should_be_of_correct_month() throws Exception {
+
+        FormIngestionPipeline.MyOptions myOptions = PipelineOptionsFactory
+                .fromArgs("--projectId=test","--keyRing=test",
+                        "--keyId=testKey", "--locationId=global",
+                        "--bucketName=testBucket")
+                .withValidation()
+                .as(FormIngestionPipeline.MyOptions.class);
+
+        Calendar calendar = Calendar.getInstance();
+        calendar.setTime(new Date());
+        int month = calendar.get(Calendar.MONTH) + 1;
+        Integer year = calendar.get(Calendar.YEAR);
+        String date = year + "-" + (month < 10 ? ("0" + month) : (month));
+        CustomFn customFn = new CustomFn(myOptions);
+        assertEquals(date + "/", customFn.folderName());
     }
 
 }

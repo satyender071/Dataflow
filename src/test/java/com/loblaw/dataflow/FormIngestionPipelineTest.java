@@ -23,9 +23,6 @@ public class FormIngestionPipelineTest {
     public ExpectedException expectedException = ExpectedException.none();
 
 
-    @InjectMocks
-    FormIngestionPipeline formIngestionPipeline;
-
     @Before
     public void setUp() throws Exception {
         MockitoAnnotations.initMocks(this);
@@ -44,32 +41,6 @@ public class FormIngestionPipelineTest {
         expectedException.expect(IllegalArgumentException.class);
         PubsubIO.readStrings().fromTopic("projects/my-project/topics/abc-*-abc");
     }
-
-    @Test
-    public void fileName_should_start_with_given_fileName_parameter() throws Exception {
-        String fileName;
-        String formName = "ABC";
-        Calendar calendar = Calendar.getInstance();
-        calendar.setTime(new Date());
-        int hours = calendar.get(Calendar.HOUR_OF_DAY);
-        int minutes = calendar.get(Calendar.MINUTE);
-        int seconds = calendar.get(Calendar.SECOND);
-        SecureRandom secureRandom = new SecureRandom();
-        fileName = formName + hours + "_" + minutes +
-                "_" + seconds + "_";
-        assertTrue(fileName, formIngestionPipeline.fileName("ABC").startsWith("ABC"));
-    }
-
-    @Test
-    public void folderName_should_be_of_correct_month() throws Exception {
-        Calendar calendar = Calendar.getInstance();
-        calendar.setTime(new Date());
-        int month = calendar.get(Calendar.MONTH) + 1;
-        Integer year = calendar.get(Calendar.YEAR);
-        String date = year + "-" + (month < 10 ? ("0" + month) : (month));
-        assertEquals(date + "/", formIngestionPipeline.folderName());
-    }
-
 
     @Test
     public void test_projectId_with_default() {
