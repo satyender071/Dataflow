@@ -1,60 +1,105 @@
 package com.loblaw.dataflow;
 
-import com.google.api.services.bigquery.model.TableFieldSchema;
-import com.google.api.services.bigquery.model.TableReference;
-import com.google.api.services.bigquery.model.TableRow;
-import com.google.api.services.bigquery.model.TableSchema;
+import avro.shaded.com.google.common.collect.ImmutableList;
+import com.google.api.services.bigquery.model.*;
+import com.google.cloud.bigquery.*;
+import com.google.cloud.bigquery.Job;
+import com.google.cloud.bigquery.JobStatistics;
+import com.google.cloud.bigquery.Table;
+import com.google.cloud.storage.BlobId;
+import com.google.cloud.storage.BlobInfo;
+import com.google.cloud.storage.Storage;
+import com.google.cloud.storage.StorageOptions;
+import com.google.common.base.Charsets;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.beam.sdk.coders.Coder;
 import org.apache.beam.sdk.io.gcp.bigquery.BigQueryIO;
 import org.apache.beam.sdk.io.gcp.bigquery.InsertRetryPolicy;
 import org.apache.beam.sdk.io.gcp.bigquery.TableRowJsonCoder;
 import org.apache.beam.sdk.transforms.DoFn;
-import org.apache.beam.sdk.transforms.JsonToRow;
 import org.json.JSONObject;
 
 import java.io.ByteArrayInputStream;
-import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Objects;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Slf4j
 public class CustomTest extends DoFn<String, TableRow> {
 
     @ProcessElement
-    public void test(ProcessContext context) {
+    public void test(ProcessContext context) throws IOException, InterruptedException {
         log.info("data unflatenned: {}", context.element());
         JSONObject jsonObject = new JSONObject(Objects.requireNonNull(context.element()));
 
         TableRow row = convertJsonToTableRow(jsonObject.toString());
-        List<TableFieldSchema> fields = new ArrayList<>();
-        TableSchema schema;
+        BigQuery bigquery = BigQueryOptions.getDefaultInstance().getService();
+        Table table = bigquery.getTable("form_ingestion", "userFormData2");
+        Schema schema = table.getDefinition().getSchema();
 
+        assert schema != null;
+        FieldList fields = schema.getFields();
+
+        List<Field> fieldList = new ArrayList<>(fields);
+        log.info("My List size: {}", fieldList.size());
+        List<TableFieldSchema> tableFieldSchemas = new ArrayList<>();
+        List<Field> newfieldList = new ArrayList<>();
         jsonObject.keys().forEachRemaining(key -> {
-
             log.info("key : {} and  value: {}", key,jsonObject.get(key));
-//            row.set(key, jsonObject.get(key));
-            fields.add(new TableFieldSchema().setName(key).setType("STRING"));
+                    newfieldList.add(Field.of(key,LegacySQLTypeName.STRING));
         });
-        schema = new TableSchema().setFields(fields);
-        log.info("fields: {}", schema.getFields());
+
+        log.info("new filed list size:{}", newfieldList.size());
+        Schema newSchema = Schema.of(newfieldList);
+        log.info("fields: {}", newSchema.getFields());
         log.info("row is : {}", row);
 
-//        BigQueryIO.writeTableRows()
-//                .withoutValidation()
-//                .withSchema(new TableSchema())
-//                .withCreateDisposition(BigQueryIO.Write.CreateDisposition.CREATE_IF_NEEDED)
-//                .withWriteDisposition(BigQueryIO.Write.WriteDisposition.WRITE_APPEND)
-//                .withExtendedErrorInfo()
-//                .withMethod(BigQueryIO.Write.Method.STREAMING_INSERTS)
-//                .withFailedInsertRetryPolicy(InsertRetryPolicy.retryTransientErrors())
-//                .to(getTable("my-demo-project-341408", "form_ingestion", "medCheck"));
+        Storage storage = StorageOptions.newBuilder().
+                setProjectId("my-demo-project-341408").build().getService();
+        BlobId blobId = BlobId.of(Objects.requireNonNull("pure_json_bucket"), jsonObject.getJSONObject("formMetaData").get("formName") + "/"
+                + "fileName" + ".json");
+        BlobInfo blobInfo = BlobInfo.newBuilder(blobId).build();
+        byte[] content = jsonObject.toString().getBytes();
+        storage.createFrom(blobInfo, new ByteArrayInputStream(content));
 
+
+        try {
+
+            TableId tableId = TableId.of("form_ingestion", "userFormData2");
+//            Table updatedTable = table.toBuilder().setDefinition(StandardTableDefinition.of(newSchema)).build();
+//            updatedTable.update();
+
+            LoadJobConfiguration loadJobConfig =
+                    LoadJobConfiguration.builder(tableId, "gs://pure_json_bucket/" + jsonObject.getJSONObject("formMetaData").get("formName") + "/"
+                                    + "fileName" + ".json")
+                            .setFormatOptions(FormatOptions.json())
+                            .setWriteDisposition(JobInfo.WriteDisposition.WRITE_APPEND)
+                            .setAutodetect(true)
+                            .setSchemaUpdateOptions(ImmutableList.of(JobInfo.SchemaUpdateOption.ALLOW_FIELD_ADDITION))
+                            .build();
+
+            // Load data from a GCS JSON file into the table
+            JobId jobId = JobId.of(UUID.randomUUID().toString());
+            Job job = bigquery.create(JobInfo.newBuilder(loadJobConfig).setJobId(jobId).build());
+            // Blocks until this load table job completes its execution, either failing or succeeding.
+            job = job.waitFor();
+            if (job.isDone()) {
+                log.info("Json from GCS successfully loaded in a table");
+            } else {
+                log.info(
+                        "BigQuery was unable to load into the table due to an error:"
+                                + job.getStatus().getError());
+            }
+        } catch (BigQueryException | InterruptedException e) {
+            log.info("Column not added during load append \n" + e.toString());
+        }
+        log.info("Hello I am here");
         context.output(row);
 
     }

@@ -7,6 +7,7 @@ import com.google.api.core.ApiFuture;
 import com.google.api.services.bigquery.Bigquery;
 import com.google.api.services.bigquery.model.TableReference;
 import com.google.api.services.bigquery.model.TableRow;
+import com.google.api.services.bigquery.model.TableSchema;
 import com.google.cloud.bigquery.*;
 import com.google.cloud.bigquery.storage.v1.*;
 import com.google.cloud.kms.v1.CryptoKeyName;
@@ -41,10 +42,7 @@ import org.json.JSONObject;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.security.SecureRandom;
-import java.util.Calendar;
-import java.util.Date;
-import java.util.Objects;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.ExecutionException;
 
 @Slf4j
@@ -93,17 +91,17 @@ public class FormIngestionPipeline {
         PCollection<PubsubMessage> pCollection = pipeline.apply("Read PubSub messages",
                 PubsubIO.readMessagesWithAttributes().fromSubscription(path.getPath()));
         pCollection.apply(ParDo.of(new CustomFn(options)))
-                .apply(ParDo.of(new CustomTest()));
-//                        .apply(
-//                                "WriteSuccessfulRecords",
-//                                BigQueryIO.writeTableRows()
-//                                        .withoutValidation()
-//                                        .withCreateDisposition(BigQueryIO.Write.CreateDisposition.CREATE_NEVER)
-//                                        .withWriteDisposition(BigQueryIO.Write.WriteDisposition.WRITE_APPEND)
-//                                        .withExtendedErrorInfo()
-//                                        .withMethod(BigQueryIO.Write.Method.STREAMING_INSERTS)
-//                                        .withFailedInsertRetryPolicy(InsertRetryPolicy.retryTransientErrors())
-//                                        .to(getTable(options.getProject(), "form_ingestion", "medCheck")));
+                .apply(ParDo.of(new CustomTest()))
+                        .apply(
+                                "WriteSuccessfulRecords",
+                                BigQueryIO.writeTableRows()
+                                        .withoutValidation()
+                                        .withCreateDisposition(BigQueryIO.Write.CreateDisposition.CREATE_NEVER)
+                                        .withWriteDisposition(BigQueryIO.Write.WriteDisposition.WRITE_APPEND)
+                                        .withExtendedErrorInfo()
+                                        .withMethod(BigQueryIO.Write.Method.STREAMING_INSERTS)
+                                        .withFailedInsertRetryPolicy(InsertRetryPolicy.retryTransientErrors())
+                                        .to(getTable(options.getProject(), "form_ingestion", "medCheck")));
         PipelineResult result = pipeline.run();
         try {
             result.waitUntilFinish();
@@ -125,7 +123,7 @@ public class FormIngestionPipeline {
                 .fromArgs(args)
                 .withValidation()
                 .as(MyOptions.class);
-        
+
         options.setStreaming(true);
         run(options);
     }

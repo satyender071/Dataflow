@@ -54,6 +54,7 @@ class CustomFn extends DoFn<PubsubMessage, String> {
             String pureJson = JsonUnflattener.unflatten(formData.toString());
             JSONObject pureJsonFormat = new JSONObject(pureJson);
             log.info("json data: {}", pureJsonFormat);
+            pureJsonFormat.put("formMetaData",object);
 
             String formName = String.valueOf(object.get("formName"));
             String fileName = fileName(formName);
@@ -68,45 +69,6 @@ class CustomFn extends DoFn<PubsubMessage, String> {
             storage.createFrom(blobInfo, new ByteArrayInputStream(content));
 
             log.info("storage data: {}", content);
-
-            BigQuery bigquery = BigQueryOptions.getDefaultInstance().getService();
-
-            TableId tableId = TableId.of("form_ingestion", formName);
-            TableDefinition tableDefinition = StandardTableDefinition.of(Schema.of());
-            TableInfo tableInfo = TableInfo.newBuilder(tableId, tableDefinition).build();
-
-
-            log.info("TableId : {}", tableId);
-
-//                writeCommittedStream(projectId.get(),"form_ingestion",formName,pureJsonFormat);
-
-
-
-//                    Schema newSchema =
-//                            Schema.of(
-//                                    Field.newBuilder("formData", LegacySQLTypeName.STRING)
-//                                            .setMode(Field.Mode.REQUIRED)
-//                                            .build());
-            // Adding below additional column during the load job
-//                                    Field.newBuilder("post_abbr", LegacySQLTypeName.STRING)
-//                                            .setMode(Field.Mode.NULLABLE)
-//                                            .build());
-//
-//                    LoadJobConfiguration loadJobConfig =
-//                            LoadJobConfiguration.builder(tableId, pureJsonFormat.toString())
-//                                    .setFormatOptions(FormatOptions.csv())
-//                                    .setWriteDisposition(JobInfo.WriteDisposition.WRITE_APPEND)
-//                                    .setSchema(newSchema)
-//                                    .setSchemaUpdateOptions(ImmutableList.of(JobInfo.SchemaUpdateOption.ALLOW_FIELD_ADDITION))
-//                                    .build();
-
-//                    JobId jobId = JobId.of(UUID.randomUUID().toString());
-//                    Job loadJob = bigquery.create(JobInfo.newBuilder(loadJobConfig).setJobId(jobId).build());
-
-            // Load data from a GCS parquet file into the table
-            // Blocks until this load table job completes its execution, either failing or succeeding.
-//                    Job completedJob = loadJob.waitFor();
-//                    log.info("job details: {}", completedJob);
             context.output(pureJsonFormat.toString());
 //                }
 
