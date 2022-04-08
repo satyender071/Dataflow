@@ -21,18 +21,17 @@ import com.google.cloud.storage.StorageOptions;
 import com.google.protobuf.ByteString;
 import com.google.protobuf.Descriptors;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.beam.runners.dataflow.options.DataflowPipelineOptions;
 import org.apache.beam.sdk.Pipeline;
 import org.apache.beam.sdk.PipelineResult;
 import org.apache.beam.sdk.extensions.gcp.options.GcsOptions;
-import org.apache.beam.sdk.io.gcp.bigquery.BigQueryIO;
-import org.apache.beam.sdk.io.gcp.bigquery.InsertRetryPolicy;
+import org.apache.beam.sdk.io.gcp.bigquery.*;
 import org.apache.beam.sdk.io.gcp.pubsub.PubsubClient;
 import org.apache.beam.sdk.io.gcp.pubsub.PubsubIO;
 import org.apache.beam.sdk.io.gcp.pubsub.PubsubMessage;
 import org.apache.beam.sdk.options.*;
-import org.apache.beam.sdk.transforms.DoFn;
-import org.apache.beam.sdk.transforms.PTransform;
-import org.apache.beam.sdk.transforms.ParDo;
+import org.apache.beam.sdk.transforms.*;
+import org.apache.beam.sdk.values.KV;
 import org.apache.beam.sdk.values.PCollection;
 import org.apache.beam.sdk.values.PCollectionTuple;
 import org.apache.beam.sdk.values.TupleTag;
@@ -45,10 +44,13 @@ import java.security.SecureRandom;
 import java.util.*;
 import java.util.concurrent.ExecutionException;
 
+import static org.apache.beam.sdk.io.gcp.bigquery.BigQueryIO.Write.CreateDisposition.CREATE_NEVER;
+import static org.apache.beam.sdk.io.gcp.bigquery.BigQueryIO.Write.WriteDisposition.WRITE_APPEND;
+
 @Slf4j
 public class FormIngestionPipeline {
 
-    public interface MyOptions extends PipelineOptions, StreamingOptions, GcsOptions {
+    public interface MyOptions extends PipelineOptions, StreamingOptions, GcsOptions, DataflowPipelineOptions {
 
         @Description("GCP KeyRing name")
         @Default.String("my-asymmetric-signing-key1")
@@ -81,7 +83,6 @@ public class FormIngestionPipeline {
         void setBucketName(ValueProvider<String> bucketName);
     }
 
-    public static final TupleTag<TableRow> TRANSFORM_OUT = new TupleTag<TableRow>() {};
     public static void run(MyOptions options) throws IOException {
 
         Pipeline pipeline = Pipeline.create(options);
@@ -91,17 +92,32 @@ public class FormIngestionPipeline {
         PCollection<PubsubMessage> pCollection = pipeline.apply("Read PubSub messages",
                 PubsubIO.readMessagesWithAttributes().fromSubscription(path.getPath()));
         pCollection.apply(ParDo.of(new CustomFn(options)))
-                .apply(ParDo.of(new CustomTest()))
-                        .apply(
-                                "WriteSuccessfulRecords",
-                                BigQueryIO.writeTableRows()
-                                        .withoutValidation()
-                                        .withCreateDisposition(BigQueryIO.Write.CreateDisposition.CREATE_NEVER)
-                                        .withWriteDisposition(BigQueryIO.Write.WriteDisposition.WRITE_APPEND)
-                                        .withExtendedErrorInfo()
-                                        .withMethod(BigQueryIO.Write.Method.STREAMING_INSERTS)
-                                        .withFailedInsertRetryPolicy(InsertRetryPolicy.retryTransientErrors())
-                                        .to(getTable(options.getProject(), "form_ingestion", "medCheck")));
+//        PCollectionTuple tupleResult = message.apply("TransformToBQ", TransformToBQ.run());
+//        WriteResult writeResult = tupleResult.get(TransformToBQ.SUCCESS_TAG)
+//                .apply("test",BigQueryIO.writeTableRows()
+//                        .withMethod(BigQueryIO.Write.Method.STREAMING_INSERTS)
+//                        .withFailedInsertRetryPolicy(InsertRetryPolicy.retryTransientErrors()) //Retry all failures except for known persistent errors.
+//                        .withWriteDisposition(WRITE_APPEND)
+//                        .withCreateDisposition(CREATE_NEVER)
+//                        .withExtendedErrorInfo() //- getFailedInsertsWithErr
+//                        .ignoreUnknownValues()
+//                        .skipInvalidRows()
+//                        .withoutValidation()
+//                        .to((row) -> {
+//                            String tableName = "userFormData3";
+//                            return new TableDestination(String.format("%s:%s.%s", "my-demo-project-341408", "form_ingestion", tableName), "Some destination");
+//                        }));
+//        writeResult.getFailedInsertsWithErr()
+//                .apply("MapFailedInserts", MapElements.via(new SimpleFunction<BigQueryInsertError, KV<String, String>>() {
+//                                                               @Override
+//                                                               public KV<String, String> apply(BigQueryInsertError input) {
+//                                                                   return KV.of("FailedInserts", input.getError().toString() + " for table" + input.getRow().get("table") + ", message: "+ input.getRow().toString());
+//                                                               }
+//                                                           }
+//                ));
+
+                .apply(ParDo.of(new CustomTest()));
+
         PipelineResult result = pipeline.run();
         try {
             result.waitUntilFinish();
@@ -125,6 +141,7 @@ public class FormIngestionPipeline {
                 .as(MyOptions.class);
 
         options.setStreaming(true);
+        options.setJobName("formData_cloud_storage_job");
         run(options);
     }
 }
