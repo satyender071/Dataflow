@@ -8,8 +8,6 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.jupiter.api.Assertions;
 import org.junit.rules.ExpectedException;
-import org.mockito.InjectMocks;
-import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 
@@ -20,7 +18,7 @@ import java.util.Date;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-public class CustomFnTest {
+public class FormDataToCloudStorageTest {
 
     @Rule
     public ExpectedException expectedException = ExpectedException.none();
@@ -43,7 +41,7 @@ public class CustomFnTest {
         DoFn.ProcessContext processContext = Mockito.mock(DoFn.ProcessContext.class);
         ByteString data = Mockito.mock(ByteString.class);
         Mockito.when((processContext.element())).thenReturn(data);
-        Assertions.assertAll(() -> new CustomFn(myOptions));
+        Assertions.assertAll(() -> new FormDataToCloudStorageFn(myOptions));
     }
 
     @Test
@@ -66,7 +64,7 @@ public class CustomFnTest {
         SecureRandom secureRandom = new SecureRandom();
         fileName = formName + hours + "_" + minutes +
                 "_" + seconds + "_";
-        CustomFn customFn = new CustomFn(myOptions);
+        FormDataToCloudStorageFn customFn = new FormDataToCloudStorageFn(myOptions);
         assertTrue(fileName, customFn.fileName("ABC").startsWith("ABC"));
     }
 
@@ -85,7 +83,7 @@ public class CustomFnTest {
         int month = calendar.get(Calendar.MONTH) + 1;
         Integer year = calendar.get(Calendar.YEAR);
         String date = year + "-" + (month < 10 ? ("0" + month) : (month));
-        CustomFn customFn = new CustomFn(myOptions);
+        FormDataToCloudStorageFn customFn = new FormDataToCloudStorageFn(myOptions);
         assertEquals(date + "/", customFn.folderName());
     }
 
