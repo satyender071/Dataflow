@@ -32,12 +32,12 @@ public class FormDataToCloudStorageTest {
     @Test
     public void check_pipeLine_should_run_correctly() throws Exception {
 
-        FormIngestionPipeline.MyOptions myOptions = PipelineOptionsFactory
+        PubSubToBigQueryOptions myOptions = PipelineOptionsFactory
                 .fromArgs("--projectId=test","--keyRing=test",
                         "--keyId=testKey", "--locationId=global",
                         "--bucketName=testBucket")
                 .withValidation()
-                .as(FormIngestionPipeline.MyOptions.class);
+                .as(PubSubToBigQueryOptions.class);
         DoFn.ProcessContext processContext = Mockito.mock(DoFn.ProcessContext.class);
         ByteString data = Mockito.mock(ByteString.class);
         Mockito.when((processContext.element())).thenReturn(data);
@@ -47,12 +47,12 @@ public class FormDataToCloudStorageTest {
     @Test
     public void fileName_should_start_with_given_fileName_parameter() throws Exception {
 
-        FormIngestionPipeline.MyOptions myOptions = PipelineOptionsFactory
+        PubSubToBigQueryOptions myOptions = PipelineOptionsFactory
                 .fromArgs("--projectId=test","--keyRing=test",
                         "--keyId=testKey", "--locationId=global",
                         "--bucketName=testBucket")
                 .withValidation()
-                .as(FormIngestionPipeline.MyOptions.class);
+                .as(PubSubToBigQueryOptions.class);
 
         String fileName;
         String formName = "ABC";
@@ -71,12 +71,12 @@ public class FormDataToCloudStorageTest {
     @Test
     public void folderName_should_be_of_correct_month() throws Exception {
 
-        FormIngestionPipeline.MyOptions myOptions = PipelineOptionsFactory
+        PubSubToBigQueryOptions myOptions = PipelineOptionsFactory
                 .fromArgs("--projectId=test","--keyRing=test",
                         "--keyId=testKey", "--locationId=global",
                         "--bucketName=testBucket")
                 .withValidation()
-                .as(FormIngestionPipeline.MyOptions.class);
+                .as(PubSubToBigQueryOptions.class);
 
         Calendar calendar = Calendar.getInstance();
         calendar.setTime(new Date());

@@ -7,12 +7,7 @@ import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
-import org.mockito.InjectMocks;
 import org.mockito.MockitoAnnotations;
-
-import java.security.SecureRandom;
-import java.util.Calendar;
-import java.util.Date;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -44,11 +39,11 @@ public class FormIngestionPipelineTest {
 
     @Test
     public void test_projectId_with_default() {
-        FormIngestionPipeline.MyOptions options = PipelineOptionsFactory
+        PubSubToBigQueryOptions options = PipelineOptionsFactory
                 .fromArgs("--projectId=test","--keyRing=test",
                         "--keyId=testKey", "--locationId=global",
                         "--bucketName=testBucket")
-                .as(FormIngestionPipeline.MyOptions.class);
+                .as(PubSubToBigQueryOptions.class);
         ValueProvider<String> projectId = options.getProjectId();
         ValueProvider<String> keyRing = options.getKeyRing();
         ValueProvider<String> keyId = options.getKeyId();

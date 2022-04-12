@@ -30,7 +30,7 @@ class FormDataToCloudStorageFn extends DoFn<PubsubMessage, String> {
     ValueProvider<String> location;
     ValueProvider<String> bucketName;
 
-    public FormDataToCloudStorageFn(FormIngestionPipeline.MyOptions options) {
+    public FormDataToCloudStorageFn(PubSubToBigQueryOptions options) {
         this.keyId = options.getKeyId();
         this.projectId = options.getProjectId();
         this.location = options.getLocationId();

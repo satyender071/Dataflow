@@ -2,7 +2,6 @@ package com.loblaw.dataflow;
 
 import avro.shaded.com.google.common.collect.ImmutableList;
 import com.github.wnameless.json.flattener.JsonFlattener;
-import com.github.wnameless.json.unflattener.JsonUnflattener;
 import com.google.api.services.bigquery.model.*;
 import com.google.cloud.bigquery.*;
 import com.google.cloud.bigquery.Job;
@@ -33,7 +32,7 @@ public class FormDataToBigQuery extends DoFn<String, TableRow> {
     ValueProvider<String> location;
     ValueProvider<String> bucketName;
 
-    public FormDataToBigQuery(FormIngestionPipeline.MyOptions options) {
+    public FormDataToBigQuery(PubSubToBigQueryOptions options) {
         this.keyId = options.getKeyId();
         this.projectId = options.getProjectId();
         this.location = options.getLocationId();
@@ -64,9 +63,10 @@ public class FormDataToBigQuery extends DoFn<String, TableRow> {
         List<Field> newfieldList = new ArrayList<>();
         Map<String,String> keyValue = new HashMap<>();
         unFlattened.keys().forEachRemaining(key -> {
-            log.info("key : {} and  value: {}", key, unFlattened.get(key));
-            keyValue.put(key.replaceAll(".","_"), unFlattened.get(key).toString());
-            newfieldList.add(Field.of(key, LegacySQLTypeName.STRING));
+            String myKey = key;
+            keyValue.put(myKey.replace('.','_'), unFlattened.get(key).toString());
+            log.info("key : {} and  value: {}", myKey.replace('.','_'), unFlattened.get(key));
+            newfieldList.add(Field.of(myKey.replace('.','_'), LegacySQLTypeName.STRING));
         });
 
         log.info("flattened key value pair: {}", keyValue.keySet());
